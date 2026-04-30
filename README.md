@@ -224,8 +224,11 @@ generally protected as open-source / academic expression.
 
 - **Your own meter** — typically legal under EU Directive 2018/2002
   Art. 9-11, which gives consumers a statutory right of access to
-  their own consumption data; operators must provide the AES-128 key
-  on request. Equivalent rules exist in non-EU jurisdictions.
+  their own consumption data. However, operators are not legally required 
+  to provide the AES-128 key for the RF interface, as the symmetric key 
+  often poses a security and configuration risk. Some providers may hand 
+  it over upon request, but acquiring the key is your responsibility. 
+  Equivalent rules exist in non-EU jurisdictions.
 - **Other meters** — can constitute unlawful interception of private
   communications and unlawful processing of personal data under GDPR
   (or equivalents). Check your national statutes before pointing this

@@ -3,7 +3,7 @@
 #include "../wmbus_app_i.h"
 #include "../protocol/wmbus_manuf.h"
 #include "../protocol/wmbus_medium.h"
-#include "../protocol/wmbus_models.h"
+#include "../drivers/engine/driver.h"
 #include "detail_canvas.h"
 #include <stdio.h>
 #include <string.h>
@@ -78,7 +78,7 @@ void wmbus_view_detail_enter(void* ctx) {
     }
 
     char m[4]; wmbus_manuf_decode(mt.manuf, m);
-    const char* model = wmbus_model_name(mt.manuf, mt.version, mt.medium);
+    const char* model = wmbus_engine_model_name(mt.manuf, mt.version, mt.medium);
     const char* med   = wmbus_medium_str(mt.medium);
 
     char id_line[24];
@@ -104,6 +104,9 @@ void wmbus_view_detail_enter(void* ctx) {
     DetailRow rows[16];
     size_t n = parse_rows(mt.text, rows, 16);
     detail_canvas_set_rows(app->detail_canvas, rows, n);
+    /* Pass the most recent APDU so the user can press OK to flip into
+     * raw-bytes mode for forensics or RE work. */
+    detail_canvas_set_raw(app->detail_canvas, mt.apdu, mt.apdu_len);
 
     view_dispatcher_switch_to_view(app->view_dispatcher, WmbusViewDetailCanvas);
 }

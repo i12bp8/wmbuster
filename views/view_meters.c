@@ -5,7 +5,7 @@
 #include "../wmbus_app_i.h"
 #include "../protocol/wmbus_manuf.h"
 #include "../protocol/wmbus_medium.h"
-#include "../protocol/wmbus_models.h"
+#include "../drivers/engine/driver.h"
 #include "scan_canvas.h"
 #include <furi_hal_light.h>
 #include <furi_hal_resources.h>
@@ -110,43 +110,44 @@ static size_t build_order(const MeterRow* snap, size_t total,
 
 /* ---- Friendly head string ----
  *
- * Format chosen to be compact AND uniquely identify each meter at a glance:
+ * Compact, scannable format chosen so the user can tell two neighbouring
+ * meters apart at a glance without the row ever overflowing the 128 px
+ * canvas:
  *
- *   "TCH 03776014"
- *   "KAM 12345678"
+ *   "FLO Gas 7132"   <- manufacturer (3 chars) + medium tag + last 4 of ID
+ *   "TCH HCA 6014"
+ *   "KAM Heat 5678"
  *
- * The full ID is the only piece of info that's always definitive (multiple
- * neighbours can have the same model/medium combination). On a 128-px-wide
- * screen the 12-character form leaves room for a "Now 1234u"-style value
- * suffix on the right.
- *
- * If the medium is recognised we add a tiny one-letter hint between the
- * manufacturer code and the ID:
- *   H = heat-cost allocator    W = water    E = electricity
- *   T = heat / cooling         G = gas      .. otherwise no hint
+ * The last four hex digits are normally enough to disambiguate meters in
+ * the same building (full IDs collide only across whole districts). Having
+ * the medium as a word instead of a single letter also makes the list far
+ * easier to read for non-technical users.
  */
-static char medium_letter(uint8_t med) {
+static const char* medium_short(uint8_t med) {
     switch(med) {
-        case 0x08: return 'H';   /* heat-cost allocator       */
-        case 0x07: return 'W';   /* water                     */
-        case 0x06: return 'W';   /* warm water                */
-        case 0x04: return 'T';   /* heat                      */
-        case 0x0A: return 'C';   /* cooling out               */
-        case 0x0B: return 'C';   /* cooling in                */
-        case 0x02: return 'E';   /* electricity               */
-        case 0x03: return 'G';   /* gas                       */
-        default:   return ' ';
+        case 0x02: case 0x80:                       return "El";
+        case 0x03:                                  return "Gas";
+        case 0x04: case 0x0C: case 0x0D:
+        case 0x62: case 0x72:                       return "Heat";
+        case 0x05:                                  return "Stm";
+        case 0x06: case 0x15:                       return "HotW";
+        case 0x07: case 0x16: case 0x17:            return "Wat";
+        case 0x08:                                  return "HCA";
+        case 0x0A: case 0x0B:                       return "Cool";
+        case 0x1A:                                  return "Smk";
+        case 0x1B:                                  return "Room";
+        case 0x1C:                                  return "Gdet";
+        case 0x28:                                  return "Sewg";
+        default:                                    return "?";
     }
 }
 
 static void format_head(const MeterRow* r, char* head, size_t cap) {
     char m[4]; wmbus_manuf_decode(r->manuf, m);
-    char letter = medium_letter(r->medium);
-    if(letter == ' ') {
-        snprintf(head, cap, "%s %08lX", m, (unsigned long)r->id);
-    } else {
-        snprintf(head, cap, "%s%c %08lX", m, letter, (unsigned long)r->id);
-    }
+    /* Last four hex digits of the ID — short and unique enough on a single
+     * RF site, while leaving plenty of room for the value column. */
+    unsigned tail = (unsigned)(r->id & 0xFFFFu);
+    snprintf(head, cap, "%s %s %04X", m, medium_short(r->medium), tail);
 }
 
 /* ---- Header / footer label helpers ---- */

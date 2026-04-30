@@ -9,19 +9,23 @@
 
 #include "wmbus_app_i.h"
 #include "subghz/wmbus_worker.h"
-#include "drivers/driver_registry.h"
+#include "drivers/engine/driver.h"
 #include "protocol/wmbus_aes.h"
 #include "key_store.h"
 #include "meters_db.h"
 #include "logger.h"
 #include "views/scan_canvas.h"
 #include "views/detail_canvas.h"
+#include "views/about_canvas.h"
 
 #include <furi_hal_light.h>
 #include <furi_hal_resources.h>
+#include <lib/subghz/devices/devices.h>
 
 #include "protocol/wmbus_link.h"
 #include "protocol/wmbus_app_layer.h"
+#include "protocol/wmbus_manuf.h"
+#include "protocol/wmbus_medium.h"
 
 #include <furi.h>
 #include <gui/gui.h>
@@ -66,22 +70,10 @@ static void start_pick(void* ctx, uint32_t idx) {
 /* ------------- About scene ------------- */
 static void about_enter(void* ctx) {
     WmbusApp* app = ctx;
-    popup_reset(app->popup);
-    popup_set_header(app->popup, WMBUS_APP_NAME, 64, 6, AlignCenter, AlignTop);
-    popup_set_text(
-        app->popup,
-        "EU wM-Bus listener\n"
-        "T1/C1/T+C/S1 + AES-128\n"
-        "keys.csv on SD card\n"
-        "Educational use only",
-        64, 22, AlignCenter, AlignTop);
-    /* No timeout: the popup closes via Back, which routes through the
-     * scene manager. A timeout would switch to a non-existent view and
-     * exit the app. */
-    view_dispatcher_switch_to_view(app->view_dispatcher, WmbusViewPopup);
+    view_dispatcher_switch_to_view(app->view_dispatcher, WmbusViewAbout);
 }
 static bool about_event(void* ctx, SceneManagerEvent e) { (void)ctx; (void)e; return false; }
-static void about_exit(void* ctx) { WmbusApp* app = ctx; popup_reset(app->popup); }
+static void about_exit(void* ctx) { (void)ctx; }
 
 static void start_enter(void* ctx) {
     WmbusApp* app = ctx;
@@ -155,7 +147,13 @@ WmbusApp* wmbus_app_alloc(void) {
     app->settings.freq_hz   = 868950000;
     app->settings.logging   = false;
     app->settings.auto_decrypt = true;
+    app->settings.module    = WmbusModuleInternal_;
     app->selected = -1;
+
+    /* Initialise the SubGHz device registry once for the whole app life-
+     * time. The worker thread picks the active radio (internal/external
+     * CC1101) on each (re-)start based on `settings.module`. */
+    subghz_devices_init();
 
     app->lock = furi_mutex_alloc(FuriMutexTypeNormal);
     app->text_buf = furi_string_alloc();
@@ -180,6 +178,7 @@ WmbusApp* wmbus_app_alloc(void) {
     app->popup = popup_alloc();
     app->scan_canvas   = scan_canvas_alloc();
     app->detail_canvas = detail_canvas_alloc();
+    app->about_canvas  = about_canvas_alloc();
 
     view_dispatcher_add_view(app->view_dispatcher, WmbusViewSubmenu,      submenu_get_view(app->submenu));
     view_dispatcher_add_view(app->view_dispatcher, WmbusViewSettings,     variable_item_list_get_view(app->var_list));
@@ -187,6 +186,7 @@ WmbusApp* wmbus_app_alloc(void) {
     view_dispatcher_add_view(app->view_dispatcher, WmbusViewPopup,        popup_get_view(app->popup));
     view_dispatcher_add_view(app->view_dispatcher, WmbusViewScan,         scan_canvas_get_view(app->scan_canvas));
     view_dispatcher_add_view(app->view_dispatcher, WmbusViewDetailCanvas, detail_canvas_get_view(app->detail_canvas));
+    view_dispatcher_add_view(app->view_dispatcher, WmbusViewAbout,        about_canvas_get_view(app->about_canvas));
 
     view_dispatcher_attach_to_gui(app->view_dispatcher, app->gui, ViewDispatcherTypeFullscreen);
 
@@ -207,6 +207,7 @@ void wmbus_app_free(WmbusApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, WmbusViewPopup);
     view_dispatcher_remove_view(app->view_dispatcher, WmbusViewScan);
     view_dispatcher_remove_view(app->view_dispatcher, WmbusViewDetailCanvas);
+    view_dispatcher_remove_view(app->view_dispatcher, WmbusViewAbout);
 
     submenu_free(app->submenu);
     variable_item_list_free(app->var_list);
@@ -214,11 +215,15 @@ void wmbus_app_free(WmbusApp* app) {
     popup_free(app->popup);
     scan_canvas_free(app->scan_canvas);
     detail_canvas_free(app->detail_canvas);
+    about_canvas_free(app->about_canvas);
 
     scene_manager_free(app->scene_manager);
     view_dispatcher_free(app->view_dispatcher);
 
     if(app->key_store) key_store_free(app->key_store);
+
+    /* Tear down the SubGHz device registry that we set up in alloc. */
+    subghz_devices_deinit();
 
     furi_record_close(RECORD_NOTIFICATION);
     furi_record_close(RECORD_STORAGE);
@@ -361,11 +366,14 @@ void wmbus_app_on_telegram(WmbusApp* app, const uint8_t* fr, size_t len, int8_t 
     static int8_t  s_log_rssi;
     size_t  log_len = 0;
 
-    /* Driver dispatch: a manufacturer match wins; otherwise the CI byte
-     * tells us whether the payload is standard OMS DIF/VIF or proprietary,
-     * which we hex-dump rather than mis-decode. */
-    const WmbusDriver* drv = wmbus_driver_find(link.M, link.version, link.medium);
-    extern const WmbusDriver g_driver_generic;
+    /* Driver dispatch — `wmbus_engine_find` is the only entry point.
+     * It always returns a non-NULL driver (a sentinel "OMS payload"
+     * one when nothing in the registry matches) so we can dereference
+     * it freely. The CI byte still gates whether we trust the OMS
+     * walker for *unrecognised* manufacturers — proprietary CI bytes
+     * fall through to a structured hex dump rather than mis-decoded
+     * fields. */
+    const WmbusDriver* drv = wmbus_engine_find(link.M, link.version, link.medium);
     bool ci_is_oms = false;
     switch(link.ci) {
     case 0x72: case 0x7A: case 0x78: case 0x79:
@@ -396,17 +404,64 @@ void wmbus_app_on_telegram(WmbusApp* app, const uint8_t* fr, size_t len, int8_t 
             size_t cap = sizeof(app->last_text);
             size_t pos = (size_t)snprintf(o, cap, "Decrypted OK\n");
             wmbus_app_render(plain, plain_len, o + pos, cap - pos);
-        } else if(drv == &g_driver_generic && !ci_is_oms) {
-            char* o = app->last_text;
+        } else if(!drv->decode && !ci_is_oms) {
+            /* Non-OMS payload from an unrecognised manufacturer.
+             *
+             * Emit structured "Label  Value" rows so the meter list and
+             * the detail view both render cleanly:
+             *
+             *   line 1 (title):  "Proprietary CI=XX"
+             *   line 2 (summary, becomes mt->last_value):  "Bytes NN"
+             *   line 3+ (body):  "Hex00 0102030405060708"
+             *
+             * Each hex row carries 8 raw bytes = 16 chars, which fits
+             * inside the 19-char value buffer used by detail_canvas. The
+             * old single-line dump produced one ~50-char run with no
+             * whitespace, which (a) spilled into last_value and pushed
+             * the manuf/ID off the scan list, and (b) was chopped by the
+             * detail-view parser into two rows whose label and value
+             * collided on screen.
+             */
+            /* Mirror the friendly walker-failure layout in driver.c — pure
+             * label/value pairs so the detail canvas can render every line
+             * as a clean two-column row without overflow. The title line
+             * encodes manuf+medium+CI so a developer reading a screenshot
+             * has all the routing info to pen a driver. */
+            char  code[4]; wmbus_manuf_decode(link.M, code);
+            char* o   = app->last_text;
             size_t cap = sizeof(app->last_text);
-            size_t pos = (size_t)snprintf(o, cap, "Proprietary CI=%02X\n", link.ci);
-            size_t n = plain_len < 24 ? plain_len : 24;
-            for(size_t i = 0; i < n && pos < cap - 3; i++)
-                pos += (size_t)snprintf(o + pos, cap - pos, "%02X", plain[i]);
-            if(plain_len > n && pos < cap - 3)
-                snprintf(o + pos, cap - pos, "..");
+            size_t pos = (size_t)snprintf(o, cap, "%s %s CI=%02X\n",
+                                          code, wmbus_medium_str(link.medium),
+                                          link.ci);
+            pos += (size_t)snprintf(o + pos, cap - pos,
+                                    "Bytes  %u\n"
+                                    "Status  proprietary\n"
+                                    "Repo  i12bp8/wmbuster\n",
+                                    (unsigned)plain_len);
+            size_t off = 0;
+            int rows = 0;
+            while(off < plain_len && rows < 4 && pos + 24 < cap) {
+                size_t n = plain_len - off; if(n > 6) n = 6;
+                pos += (size_t)snprintf(o + pos, cap - pos,
+                                        "Hex%02u ", (unsigned)off);
+                for(size_t k = 0; k < n && pos + 3 < cap; k++)
+                    pos += (size_t)snprintf(o + pos, cap - pos,
+                                            "%02X", plain[off + k]);
+                if(pos + 1 < cap) { o[pos++] = '\n'; o[pos] = 0; }
+                off += n;
+                rows++;
+            }
         } else {
-            drv->decode(plain, plain_len, app->last_text, sizeof(app->last_text));
+            /* Pass the full link context: drivers like Diehl PRIOS need
+             * the meter ID and CI byte to derive their stream-cipher seed,
+             * and the legacy callback path is preserved for everything
+             * else (see wmbus_engine_decode_ctx). */
+            WmbusDecodeCtx ctx = {
+                .manuf = link.M, .version = link.version, .medium = link.medium,
+                .ci    = link.ci, .id     = link.id,
+                .apdu  = plain,   .apdu_len = plain_len,
+            };
+            wmbus_engine_decode_ctx(&ctx, app->last_text, sizeof(app->last_text));
         }
     }
 

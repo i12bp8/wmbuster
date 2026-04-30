@@ -88,6 +88,12 @@ typedef enum {
     WmbusSort_Count,
 } WmbusSort;
 
+typedef enum {
+    WmbusModuleInternal_ = 0,   /* on-board CC1101 (default)         */
+    WmbusModuleExternal_ = 1,   /* GPIO-attached external CC1101     */
+    WmbusModule_Count_,
+} WmbusModuleSetting;
+
 typedef struct {
     WmbusMode mode;
     uint32_t  freq_hz;     /* derived from mode; kept in sync */
@@ -95,6 +101,7 @@ typedef struct {
     bool      auto_decrypt;
     WmbusFilter filter;    /* RSSI-based filter for the meter list */
     WmbusSort   sort;      /* ordering of the meter list */
+    WmbusModuleSetting module; /* internal vs external CC1101       */
 } WmbusSettings;
 
 typedef enum {
@@ -115,6 +122,7 @@ typedef enum {
     WmbusViewPopup,
     WmbusViewScan,            /* canvas-based meter list (custom) */
     WmbusViewDetailCanvas,    /* canvas-based detail view (custom) */
+    WmbusViewAbout,           /* canvas-based about page (custom)  */
     WmbusView_Count,
 } WmbusView;
 
@@ -123,6 +131,7 @@ typedef struct WmbusWorker WmbusWorker;
 
 struct ScanCanvas;        /* fwd-decl: defined in views/scan_canvas.h     */
 struct DetailCanvas;      /* fwd-decl: defined in views/detail_canvas.h   */
+struct AboutCanvas;       /* fwd-decl: defined in views/about_canvas.h    */
 struct KeyStore;          /* fwd-decl: defined in key_store.h             */
 
 struct WmbusApp {
@@ -135,6 +144,7 @@ struct WmbusApp {
     Popup*             popup;
     struct ScanCanvas*   scan_canvas;
     struct DetailCanvas* detail_canvas;
+    struct AboutCanvas*  about_canvas;
     struct KeyStore*     key_store;
     FuriString*        text_buf;
     Storage*           storage;

@@ -17,6 +17,7 @@
  * This file deliberately overrides the weak default in wmbus_worker.c.
  */
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -45,9 +46,15 @@ static bool read_rxbytes_stable(const FuriHalSpiBusHandle* h, uint8_t* out, bool
     return true;
 }
 
-size_t wmbus_hal_rx_drain(uint8_t* dst, size_t cap) {
+size_t wmbus_hal_rx_drain(uint8_t* dst, size_t cap, bool external) {
     if(!dst || cap == 0) return 0;
-    const FuriHalSpiBusHandle* h = &furi_hal_spi_bus_handle_subghz;
+    /* External CC1101 modules sit on the GPIO header behind the
+     * `external` SPI bus that the cc1101_ext plugin initialises during
+     * `subghz_devices_begin()`. The internal radio remains on the
+     * dedicated `subghz` bus. */
+    const FuriHalSpiBusHandle* h = external
+                                       ? &furi_hal_spi_bus_handle_external
+                                       : &furi_hal_spi_bus_handle_subghz;
 
     furi_hal_spi_acquire(h);
     uint8_t avail = 0;

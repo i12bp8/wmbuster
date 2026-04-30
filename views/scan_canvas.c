@@ -130,9 +130,25 @@ static void draw_row(Canvas* c, int y_top, const ScanRow* r, bool selected) {
     head[sizeof(head) - 1] = 0;
 
     /* The caller fills `value` with the decoded reading or a status
-     * badge (ENC / BAD / DEC). */
-    const char* val = r->value;
-    int vw = (val && *val) ? canvas_string_width(c, val) : 0;
+     * badge (ENC / BAD / DEC). The head ("MFR ID") is the only stable
+     * identifier we have, so we never let the value shrink it below a
+     * minimum width — instead the value gets truncated from its right
+     * edge until both fit. Without this clamp a verbose value (e.g. a
+     * raw hex dump from a proprietary frame) used to wipe the head off
+     * the row entirely, leaving the user staring at nothing but hex. */
+    const int kHeadMinW = 60;     /* enough for "MFR 12345678" + medium */
+    char val[24];
+    val[0] = 0;
+    if(r->value[0]) {
+        strncpy(val, r->value, sizeof(val) - 1);
+        val[sizeof(val) - 1] = 0;
+    }
+    int vw = val[0] ? canvas_string_width(c, val) : 0;
+    int max_val_w = 128 - text_x - kHeadMinW - 4;
+    while(vw > max_val_w && val[0]) {
+        val[strlen(val) - 1] = 0;
+        vw = canvas_string_width(c, val);
+    }
 
     int max_head_w = 128 - text_x - vw - 4;
     while(canvas_string_width(c, head) > max_head_w && head[0]) {
@@ -140,7 +156,7 @@ static void draw_row(Canvas* c, int y_top, const ScanRow* r, bool selected) {
     }
 
     canvas_draw_str(c, text_x, text_y, head);
-    if(val && *val) canvas_draw_str(c, 128 - vw - 2, text_y, val);
+    if(val[0]) canvas_draw_str(c, 128 - vw - 2, text_y, val);
 
     canvas_set_color(c, ColorBlack);
 }

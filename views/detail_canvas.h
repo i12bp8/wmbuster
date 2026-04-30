@@ -42,3 +42,10 @@ typedef struct {
 } DetailRow;
 
 void detail_canvas_set_rows(DetailCanvas* dc, const DetailRow* rows, size_t n);
+
+/* Push the raw APDU bytes so the user can toggle into a hex-dump view via
+ * the OK button. When `apdu` is NULL or `apdu_len` is zero the canvas
+ * disables the toggle and stays in label/value mode. The buffer is copied;
+ * the caller may free or reuse it after the call returns. */
+void detail_canvas_set_raw(DetailCanvas* dc,
+                           const uint8_t* apdu, size_t apdu_len);

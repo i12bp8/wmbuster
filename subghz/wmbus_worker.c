@@ -1,4 +1,5 @@
 #include "wmbus_worker.h"
+#include "wmbus_radio.h"
 #include "../protocol/wmbus_3of6.h"
 #include "../protocol/wmbus_manchester.h"
 #include "../protocol/wmbus_crc.h"
@@ -8,6 +9,8 @@
 #include <furi_hal_subghz.h>
 #include <furi_hal_light.h>
 #include <furi_hal_resources.h>
+#include <lib/subghz/devices/devices.h>
+#include <lib/subghz/devices/preset.h>
 
 /* CC1101 register presets.
  *
@@ -60,9 +63,13 @@ static const uint8_t k_preset_s1[] = {
 };
 
 /* RX-FIFO drain hook. The default returns 0 so unit tests on host can
- * link without HAL; wmbus_hal_rx.c overrides this for the device. */
-__attribute__((weak)) size_t wmbus_hal_rx_drain(uint8_t* dst, size_t cap) {
-    (void)dst; (void)cap;
+ * link without HAL; wmbus_hal_rx.c overrides this for the device.
+ *
+ * `external` selects which SPI handle to talk to: false -> on-board
+ * CC1101 on `furi_hal_spi_bus_handle_subghz`, true -> GPIO module on
+ * `furi_hal_spi_bus_handle_external`. */
+__attribute__((weak)) size_t wmbus_hal_rx_drain(uint8_t* dst, size_t cap, bool external) {
+    (void)dst; (void)cap; (void)external;
     return 0;
 }
 
@@ -255,24 +262,38 @@ static int32_t worker_thread(void* ctx) {
     WmbusWorker* w = (WmbusWorker*)ctx;
     Slicer s; memset(&s, 0, sizeof(s));
 
-    furi_hal_subghz_reset();
-    furi_hal_subghz_load_custom_preset((uint8_t*)preset_for(w->mode));
+    /* Pick the active radio. `subghz_devices_init()` is called once at
+     * app start so the registry is ready by the time we land here. */
+    WmbusModule mod = (w->app->settings.module == WmbusModuleExternal_)
+                          ? WmbusModuleExternal
+                          : WmbusModuleInternal;
+    const SubGhzDevice* dev = wmbus_radio_select(NULL, mod);
+    if(!dev) {
+        FURI_LOG_E("WmbusWorker", "no radio device available");
+        return -1;
+    }
+    bool is_external = wmbus_radio_is_external(dev);
+
+    subghz_devices_reset(dev);
+    subghz_devices_idle(dev);
+    subghz_devices_load_preset(
+        dev, FuriHalSubGhzPresetCustom, (uint8_t*)preset_for(w->mode));
     /* Override stale frequency settings that don't match the chosen mode. */
     uint32_t f = w->app->settings.freq_hz;
     uint32_t fdef = freq_for_mode(w->mode);
     if(f < 868000000 || f > 869500000) f = fdef;
-    furi_hal_subghz_set_frequency_and_path(f);
-    furi_hal_subghz_flush_rx();
-    furi_hal_subghz_rx();
+    subghz_devices_set_frequency(dev, f);
+    subghz_devices_flush_rx(dev);
+    subghz_devices_set_rx(dev);
 
     uint32_t idle_ticks = 0;
     while(w->running) {
         furi_delay_tick(1);
 
-        s.rssi = (int8_t)furi_hal_subghz_get_rssi();
+        s.rssi = (int8_t)subghz_devices_get_rssi(dev);
 
         uint8_t buf[64];
-        size_t got = wmbus_hal_rx_drain(buf, sizeof(buf));
+        size_t got = wmbus_hal_rx_drain(buf, sizeof(buf), is_external);
 
         if(got > 0) {
             idle_ticks = 0;
@@ -297,8 +318,9 @@ static int32_t worker_thread(void* ctx) {
         }
     }
 
-    furi_hal_subghz_idle();
-    furi_hal_subghz_sleep();
+    subghz_devices_idle(dev);
+    subghz_devices_sleep(dev);
+    wmbus_radio_release(dev);
     return 0;
 }
 

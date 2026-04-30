@@ -1,226 +1,265 @@
-# wM-Buster
+<div align="center">
 
-A passive Wireless M-Bus listener for the Flipper Zero. Reads utility
-meters (heat, water, gas, electricity, heat-cost allocators) on the EU
-868 MHz band using only the built-in CC1101 radio.
+<img src="docs/banner.png" alt="wM-Buster — wM-Bus smart-meter analyser for Flipper Zero" width="100%"/>
+
+**Passive wireless M-Bus listener for the Flipper Zero**
+
+Read EU utility meters (heat, water, gas, electricity, heat-cost allocators)
+on the 868 MHz band using only the CC1101 — internal or external module.
+
+[![CI](https://github.com/i12bp8/wmbuster/actions/workflows/ci.yml/badge.svg)](https://github.com/i12bp8/wmbuster/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/i12bp8/wmbuster?include_prereleases&sort=semver)](https://github.com/i12bp8/wmbuster/releases/latest)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Flipper Zero](https://img.shields.io/badge/Flipper%20Zero-firmware%20API%2087.1-orange?logo=flipper)](https://flipperzero.one)
+[![GitHub Pages](https://img.shields.io/badge/docs-GitHub%20Pages-222?logo=github)](https://i12bp8.github.io/wmbuster/)
+[![RX only](https://img.shields.io/badge/radio-RX%20only-success)](#what-it-does-not-do)
+
+[**Project page**](https://i12bp8.github.io/wmbuster/) &nbsp;·&nbsp;
+[**Releases**](https://github.com/i12bp8/wmbuster/releases) &nbsp;·&nbsp;
+[**Changelog**](CHANGELOG.md) &nbsp;·&nbsp;
+[**Disclaimer**](DISCLAIMER.md) &nbsp;·&nbsp;
+[**Contributing**](drivers/CONTRIBUTING.md)
+
+<br/>
+
+<img src="docs/demoscan.png"    alt="Live meter scan"  width="45%"/>
+&nbsp;&nbsp;
+<img src="docs/demodetails.png" alt="Per-meter detail" width="45%"/>
+
+</div>
+
+---
 
 > [!CAUTION]
-> **Only use this app on meters you own.** Decrypting someone else's
-> meter is illegal. The author does not condone unlawful use and is
-> not responsible for what you do with this tool. This app is
-> receive-only and never transmits.
+> **Only point this app at meters you own.** Decrypting someone else's meter
+> is illegal in most jurisdictions. The author does not condone unlawful use
+> and is not responsible for what you do with this tool. Read the full
+> [**Legal Disclaimer**](DISCLAIMER.md) before installing.
 
-<p align="center">
-  <img src="docs/demoscan.png"    alt="Live meter scan"   width="45%"/>
-  &nbsp;&nbsp;
-  <img src="docs/demodetails.png" alt="Per-meter detail"  width="45%"/>
-</p>
+> [!IMPORTANT]
+> **wM-Buster is receive-only.** It never transmits, jams, replays, or
+> spoofs. It is a passive analyser, by design.
+
+---
 
 ## Features
 
-- **Modes T1, C1, T+C combined, S1** on the CC1101.
-  T+C is the default and runs both T-mode (3-of-6) and C-mode (NRZ
-  Format A & B) on a single chip configuration via post-sync byte
-  detection (`0xCD` / `0x3D` / fall-through).
-- **EN 13757-3 application layer**: DIF/VIF walker covering Energy,
+- **All four EU modes** — T1, C1, T+C combined, S1.
+  T+C is the default and decodes both T-mode (3-of-6) and C-mode (NRZ
+  Format A & B) on a single chip configuration via post-sync byte detection
+  (`0xCD` / `0x3D` / fall-through).
+- **External CC1101 module support** — Settings → Module → External routes
+  RX through the GPIO-header module for noticeably better range and a
+  proper external antenna. Auto-falls-back to the internal radio when no
+  module is present. *(New in 1.1.0.)*
+- **EN 13757-3 application layer** — DIF/VIF walker covering Energy,
   Volume, Mass, Power, Volume flow, Mass flow, Flow / Return / External
-  temperature, Temperature difference, Pressure, On-time, Operating
-  time, Date, DateTime, HCA units, Fabrication number, Bus address.
-- **Manufacturer drivers**: Techem (HCA / heat / water / smoke),
-  Kamstrup, Diehl / Hydrometer / Sappel, Qundis, ista, Brunata.
-  Unknown manufacturers fall through to the generic walker; payloads
-  with proprietary CI bytes are clean-hex-dumped instead of mis-decoded.
-- **AES-128-CBC mode 5 auto-decrypt** using the STM32WB hardware crypto
-  block. Per-meter keys live in a CSV on the SD card and are loaded at
-  startup. Three-state badge (`ENC` / `BAD` / `DEC`) tells you whether
-  a key is missing, wrong, or working.
-- **Live meter list** with signal-bar RSSI, value preview, and
-  filter / sort (Top-N, by signal / recent / id / packets).
-- **Detail view** with the decoded reading, model name, packet count,
-  encryption state, and a scrollable label/value list.
-- **SD card logging** of raw frame + parsed text (optional).
+  temperatures, Temperature difference, Pressure, On-time, Operating time,
+  Date, DateTime, HCA units, Fabrication number, Bus address.
+- **AES-128 mode 5 decryption** — drop a `keys.csv` on the SD card and
+  encrypted meters automatically decrypt to readable rows.
+- **Manufacturer drivers** — Techem (HCA / heat / water / smoke), Kamstrup,
+  Diehl / Hydrometer / Sappel / IZAR, Qundis / ista / Brunata, BMeters,
+  Engelmann, Sontex, Zenner, Apator, GWF, BFW, and more.
+- **Custom canvas UI** — meter list with RSSI bar, packet counts, and a
+  per-meter detail page with the parsed values, raw hex, and frame stats.
+- **SD logging** — raw + parsed telegrams to `/ext/apps_data/wmbuster/` for
+  offline analysis with `rtl_433` or `wmbusmeters`.
 
-## Compatibility status
+> [!TIP]
+> Don't see your meter? Most unknown meters still produce useful output via
+> the OMS DIF/VIF fall-through walker. If yours doesn't, see
+> [**Adding a driver**](#adding-a-driver) — porting from `wmbusmeters` is
+> usually a 50-line job.
 
-The protocol layer is built from public standards (EN 13757-3/4, OMS
-Vol. 2) and matches `wmbusmeters` / `rtl-wmbus` byte-for-byte on every
-test vector. Field-validation has so far been limited to a single
-residential RF environment dominated by Techem hardware.
+## What it does not do
 
-| Component                                  | Field-validated  |
-|--------------------------------------------|------------------|
-| T+C reception, `0x543D` sync, 3-of-6, CRC  | yes              |
-| Techem CI=0xA2 HCA driver (FHKV-3 / v0x52) | yes              |
-| C-mode Format A NRZ                        | yes              |
-| Mode 5 enc-mode extraction                 | yes              |
-| C-mode Format B NRZ                        | not yet          |
-| S1 Manchester @ 868.30 MHz                 | not yet          |
-| Kamstrup / Diehl / Qundis / ista / Brunata | not yet          |
-| OMS DIF/VIF walker on decrypted payloads   | not yet          |
+- **No transmit.** Ever. T2 / C2 bidirectional exchanges and meter wake-up
+  requests are out of scope by design.
+- **No N-mode** (169 MHz narrowband) — the Flipper's CC1101 is hardware-
+  locked to the 300 / 430 / 868 MHz SRD subbands.
+- **No US protocols** — Itron ERT, Sensus FlexNet, Neptune R900 are
+  separate radio stacks and not currently supported. See the
+  [project page](https://i12bp8.github.io/wmbuster/) for the rationale.
+- **No key cracking, no replay, no spoofing.** This is a viewer.
 
-If you have meters from any of the "not yet" rows, please open a
-[compatibility report](https://github.com/i12bp8/wmbuster/issues/new?template=compat.yml)
-with manufacturer code, version, medium, and an example raw frame
-captured by `rtl_433`. That's the fastest way to make this list grow.
+## Install
 
-## Build & install
+> [!TIP]
+> Pre-built `.fap` files for every release are attached to the
+> [**Releases**](https://github.com/i12bp8/wmbuster/releases) page. Drop
+> `wmbuster.fap` into `/ext/apps/Sub-GHz/` on your Flipper's SD card and
+> launch from `Apps → Sub-GHz → wM-Buster`.
 
-Requires the Flipper [`ufbt`](https://github.com/flipperdevices/flipperzero-ufbt)
-toolchain.
+### Build from source
 
 ```sh
-ufbt              # builds dist/wmbuster.fap
-ufbt launch       # builds + uploads + starts on a connected Flipper
+# Install ufbt (Flipper's build tool)
+pip install --upgrade ufbt
+ufbt update --channel=release
+
+# Clone & build
+git clone https://github.com/i12bp8/wmbuster.git
+cd wmbuster
+ufbt                # produces dist/wmbuster.fap
+ufbt launch         # flash + start on a connected Flipper
 ```
 
-## Testing
-
-Host-side regression tests for the protocol code (no Flipper required):
+Host-side regression tests (no Flipper required):
 
 ```sh
 make -C tests check
 ```
 
-The tests parse real `rtl_433`-captured frames (with IDs redacted) and
-assert that the manufacturer / version / medium / CI / encryption-mode
-extraction matches the reference. Add new vectors to
-`tests/test_link.c` whenever you encounter a meter that exposes a new
-code path. CI on GitHub Actions runs the suite on every push.
+## Decryption (AES-128 mode 5)
 
-## Usage
-
-1. Open **wM-Buster** under *Apps → Sub-GHz*.
-2. Pick **Scan**. The default mode is T+C (covers most EU residential
-   buildings). Switch in *Settings* if you need pure T1, C1 or S1.
-3. Frames appear within seconds. Each row shows manufacturer code,
-   8-digit ID, RSSI bars, and either the latest reading or a status
-   badge.
-4. Press **OK** on a row to open the detail view.
-5. Press **Back** to return to the meter list (radio keeps running) or
-   to the root menu (radio keeps running, LED off).
-
-## Encryption keys
-
-Newer EU meters (Techem v0x6A, Kamstrup MULTICAL etc.) ship with
-AES-128-CBC mode 5 enabled. To decrypt, drop a CSV onto the SD card
-at:
+Newer EU meters (Techem v0x6A, Kamstrup MULTICAL, etc.) ship with AES-128
+enabled. Drop a CSV on the SD card at:
 
 ```
 /ext/apps_data/wmbuster/keys.csv
 ```
 
-One line per meter, `#`-comments allowed:
+One line per meter, `#` comments allowed:
 
-```
+```csv
 # Manufacturer (3 chars), 8-digit hex ID, 32-hex AES-128 key
 TCH,27404216,0123456789ABCDEF0123456789ABCDEF
 KAM,12345678,FEDCBA9876543210FEDCBA9876543210
 ```
 
-The keys are typically printed on the meter's installation document
-or accessible through the property-management portal that operates
-the meter (Techem, ista, etc.).
+Restart the app to reload the file. Open **Keys** from the root menu to
+confirm the loaded entries (only a fingerprint of each key is shown). When
+a matching key is on file the meter row flips from `ENC` to `DEC` and the
+decoded reading appears.
 
-Restart the app to reload the file. Open **Keys** from the root menu
-to see the loaded entries (only a fingerprint of each key is shown).
-
-When a matching key is on file the meter row flips from `ENC` to
-`DEC` and the decoded reading appears.
+> [!WARNING]
+> **Never publish AES keys.** They identify a real customer's meter and
+> their disclosure can enable billing fraud. The maintainers will delete
+> any issue or PR that includes real keys, real IDs, or decrypted
+> captures. See [DISCLAIMER §5](DISCLAIMER.md#5-aes-keys).
 
 ## Mode selection
 
-| Mode | Frequency  | Bit rate          | Encoding              | Notes                       |
-|------|------------|-------------------|-----------------------|-----------------------------|
-| T1   | 868.95 MHz | 100 kchip/s       | 3-of-6                | Older Techem firmware       |
-| C1   | 868.95 MHz | 100 kbit/s        | NRZ, Format A/B auto  | Newer Techem, most Kamstrup |
-| T+C  | 868.95 MHz | 100 kbit/s        | T1 or C1, auto-detect | **Default** — broadest      |
-| S1   | 868.30 MHz | 32.768 kbit/s     | Manchester            | Legacy water / gas          |
+| Mode  | Frequency  | Bit rate          | Encoding              | Notes                       |
+|-------|------------|-------------------|-----------------------|-----------------------------|
+| T1    | 868.95 MHz | 100 kchip/s       | 3-of-6                | Older Techem firmware       |
+| C1    | 868.95 MHz | 100 kbit/s        | NRZ, Format A/B auto  | Newer Techem, most Kamstrup |
+| T+C   | 868.95 MHz | 100 kbit/s        | T1 or C1, auto-detect | **Default** — broadest      |
+| S1    | 868.30 MHz | 32.768 kbit/s     | Manchester            | Legacy water / gas          |
 
-Mode N (169 MHz narrowband) is not supported: the CC1101 in the
-Flipper Zero is hardware-locked to the 300/430/868 MHz subbands.
+## External CC1101 module
+
+> [!TIP]
+> An external module typically buys you **10–20 dB** more sensitivity
+> compared with the internal antenna and lets you use a proper SMA antenna.
+> Modules from Tindie, AliExpress, or quen0n's PCB all work.
+
+1. Wire the module to the GPIO header — same pin-out as the standard
+   Flipper external CC1101 mod (PA7=MOSI, PA6=MISO, PB3=SCK, PD0=CSN,
+   PA4=GDO0, GND, 3V3 from pin 9).
+2. Open **wM-Buster → Settings → Module → External**.
+3. Re-enter the **Scan** view. The OTG rail powers the module while
+   scanning and shuts off when you stop.
+
+If the module isn't detected, the app silently falls back to the internal
+radio so you never get a black screen.
+
+## Documentation
+
+- **[Project page](https://i12bp8.github.io/wmbuster/)** — landing page,
+  screenshots, install steps.
+- **[CHANGELOG](CHANGELOG.md)** — release notes, version-by-version.
+- **[DISCLAIMER](DISCLAIMER.md)** — full legal terms, prohibited use,
+  spectrum / AES policy.
+- **[drivers/CONTRIBUTING.md](drivers/CONTRIBUTING.md)** — how to add a
+  new manufacturer driver in one C file.
+- **[drivers/README.md](drivers/README.md)** — driver layout reference.
 
 ## Project layout
 
 ```
-wmbus_inspector/
-├── application.fam           # ufbt manifest
-├── wmbus_app.c               # entry point + scene wiring
-├── wmbus_app_i.h             # shared types (WmbusApp, settings, meter row)
-├── meters_db.[ch]            # in-RAM bounded meter table
-├── key_store.[ch]            # AES-key CSV reader
-├── logger.[ch]               # raw + parsed SD logging
+wmbuster/
+├── application.fam          # ufbt manifest
+├── wmbus_app.[ch]           # entry point, scene wiring, settings
+├── meters_db.[ch]           # bounded in-RAM meter table
+├── key_store.[ch]           # AES-key CSV loader
+├── logger.[ch]              # SD logging (raw + parsed)
 ├── protocol/
-│   ├── wmbus_3of6.[ch]       # EN 13757-4 §6.2.1.1 chip decoder
-│   ├── wmbus_manchester.[ch] # Manchester decoder (S1)
-│   ├── wmbus_crc.[ch]        # CRC-16/EN-13757 + Format A/B verify
-│   ├── wmbus_link.[ch]       # L/C/M/A/CI parsing + enc-mode extraction
-│   ├── wmbus_app_layer.[ch]  # DIF/VIF walker + renderer
-│   ├── wmbus_aes.[ch]        # AES-CBC over furi_hal_crypto
-│   ├── wmbus_manuf.[ch]      # 16-bit manuf code ↔ 3-letter ASCII
-│   ├── wmbus_medium.[ch]     # device-type code → human string
-│   └── wmbus_models.[ch]     # friendly meter-model names
+│   ├── wmbus_3of6.[ch]      # EN 13757-4 §6.2.1.1 chip decoder (T1)
+│   ├── wmbus_manchester.[ch]# Manchester decoder (S1)
+│   ├── wmbus_crc.[ch]       # CRC-16/EN-13757 + Format A/B verifiers
+│   ├── wmbus_link.[ch]      # L/C/M/A/CI parsing, encryption-mode tag
+│   ├── wmbus_app_layer.[ch] # DIF/VIF walker + renderer
+│   ├── wmbus_aes.[ch]       # AES-CBC over furi_hal_crypto
+│   ├── wmbus_manuf.[ch]     # 16-bit manuf code <-> 3-letter ASCII
+│   └── wmbus_medium.[ch]    # device-type code -> human string
 ├── subghz/
-│   ├── wmbus_worker.[ch]     # CC1101 RX worker, slicer, CRC
-│   └── wmbus_hal_rx.c        # FIFO drain via SubGHz SPI
+│   ├── wmbus_worker.[ch]    # CC1101 worker, slicer, CRC, dispatch
+│   ├── wmbus_hal_rx.c       # FIFO drain via SPI (int + ext handles)
+│   └── wmbus_radio.[ch]     # int/ext device selector (ProtoPirate-style)
 ├── drivers/
-│   ├── driver_registry.[ch]  # manufacturer match-and-dispatch
-│   ├── driver_generic.c      # OMS standard fall-through
-│   ├── driver_techem.c       # FHKV-3/4 HCA, heat, water, smoke
-│   ├── driver_kamstrup.c
-│   ├── driver_diehl.c
-│   └── driver_eu_hca.c       # Qundis / ista / Brunata HCAs
-└── views/
-    ├── view_meters.c         # meter list scene
-    ├── view_detail.c         # single-meter detail scene
-    ├── view_settings.c       # mode / filter / sort / logging
-    ├── view_keys.c           # key store browser
-    ├── scan_canvas.[ch]      # custom canvas widget for the list
-    └── detail_canvas.[ch]    # custom canvas widget for the detail
+│   ├── engine/              # registry + uniform driver interface
+│   ├── _oms_split.h         # shared "OMS prefix -> mfct trailer" helper
+│   ├── CONTRIBUTING.md      # how to add a new driver
+│   └── europe/
+│       ├── techem/          # FHKV-3/4 HCA, heat, water, smoke, MK-Radio
+│       ├── kamstrup/        # MULTICAL family
+│       ├── diehl/           # Hydrometer / Sappel / IZAR
+│       ├── qundis/          # Qundis / ista / Brunata HCAs
+│       ├── bmeters/         # Hydrodigit
+│       ├── engelmann/       # Hydroclima HCA
+│       ├── sontex/          # RFM-TX1 water (legacy + OMS firmwares)
+│       ├── zenner/          # Zenner B.One
+│       ├── apator/          # NA-1
+│       ├── misc/            # GWF water, BFW 240-Radio
+│       └── ...              # see drivers/README.md
+├── views/                   # canvas widgets + scenes
+└── tests/                   # host-side regression tests (no Flipper)
 ```
 
-## Adding a manufacturer driver
+## Adding a driver
 
-1. Copy `drivers/driver_generic.c` to `drivers/driver_<name>.c`.
-2. Implement `match(manuf, version, medium)` and `decode(...)`.
-3. Add the file to `application.fam` and an `extern` + entry in
-   `drivers/driver_registry.c`.
+We've made adding a manufacturer driver as small a job as we could. The
+common case is **one C file, ~50 lines**: drop it in
+`drivers/europe/<vendor>/<name>.c`, add it to `application.fam` and the
+registry.
 
-Drivers receive the (decrypted) APDU starting at the byte after the
-CI byte; they may use the generic walker (`wmbus_app_render`) or parse
-proprietary fields directly.
+A worked example for porting from `wmbusmeters` is in
+[**drivers/CONTRIBUTING.md**](drivers/CONTRIBUTING.md). Pull requests with
+a regression test in `tests/test_ports.c` are merged the fastest.
 
-## Limitations
+> [!TIP]
+> **Don't include real telegrams from real meters.** Use the public
+> wmbusmeters reference telegrams (their repo is GPLv3-licensed,
+> compatible with this project) or synthesise a frame.
 
-- **Sensitivity** is bounded by the small internal antenna; expect
-  10–20 dB worse than a USB SDR. A few metres of in-building range
-  is realistic.
-- **No transmit**: the app is RX-only by design. T2/C2 bidirectional
-  exchanges and meter wake-up requests are out of scope.
-- **No N-mode** (169 MHz) — hardware limitation of the Flipper.
-- The OMS DIF/VIF walker covers the practical subset (energy / volume
-  / mass / power / temperature / pressure / dates / HCA). Less common
-  quantities are surfaced as Unknown and filtered from the rendered
-  list.
+## Testing
 
-## Testing against rtl_433
+The host test-suite covers every manufacturer driver against the public
+`wmbusmeters` reference telegrams:
 
-For ground-truth validation, capture the same RF environment with a
-USB SDR and compare:
+```sh
+make -C tests check
+```
+
+For ground-truth validation against an SDR, capture the same air with
+`rtl_433`:
 
 ```sh
 rtl_433 -f 868.95M -s 1.6M -Y minmax -R 104 -R 105 -F json > capture.jsonl
 ```
 
-`-R 104` is the rtl_433 wM-Bus T+C decoder, `-R 105` is S-mode.
+(`-R 104` is rtl_433's wM-Bus T+C decoder, `-R 105` is S-mode.)
 
-## Legal
+## Standards & references
 
-This is dual-use research software. Receiving on the unlicensed 868 MHz
-SRD band is permitted under ETSI EN 300 220 (and equivalent regional
-rules) and the app never transmits. Distribution of analysis tools is
-generally protected as open-source / academic expression.
+- **EN 13757-4** — wM-Bus PHY / link layer.
+- **EN 13757-3** — application layer (DIF/VIF).
+- **OMS Specification Vol. 2** — profile + encryption.
+- **TI SWRA522** — CC1101 wM-Bus implementation note.
 
-**Operating the app** is your responsibility:
+The decoders were cross-checked against:
 
 - **Your own meter** — typically legal under EU Directive 2018/2002
   Art. 9-11, which gives consumers a statutory right of access to
@@ -234,27 +273,50 @@ generally protected as open-source / academic expression.
   (or equivalents). Check your national statutes before pointing this
   app at a meter that isn't yours.
 
-The maintainers ship no example keys, no decrypted captures and no
-identifying telegrams.
+## Contributing
 
-## Standards
+Contributions welcome — bug reports, driver ports, UI polish, docs.
 
-- **EN 13757-4** — Wireless M-Bus PHY / Link layer
-- **EN 13757-3** — Application layer (DIF/VIF)
-- **OMS Specification Vol. 2** — Profile + encryption
-- **TI SWRA522** — CC1101 wM-Bus implementation note
+1. **Open an issue first** for non-trivial changes so we can sanity-check
+   the approach.
+2. **Stick to the existing style**: tabs in `Makefile`, 4-space indent in
+   C, no Doxygen, comments explain *why* not *what*.
+3. **Add a test** in `tests/test_ports.c` for any new driver — telegrams
+   from `wmbusmeters/tests/test_*.txt` are fair game.
+4. **Run** `make -C tests check && ufbt` locally and make sure both pass.
+5. **Don't commit real keys, real meter IDs in clear, or decrypted
+   captures of meters that aren't yours.** PRs containing those will be
+   force-pushed clean.
+
+See [drivers/CONTRIBUTING.md](drivers/CONTRIBUTING.md) for the driver
+walkthrough and [DISCLAIMER §5](DISCLAIMER.md#5-aes-keys) for the data
+hygiene policy.
+
+## Roadmap
+
+- Driver ports for the long tail of EU water meters still missing
+  (Maddalena, Aquametro, Sensus iConA, Itron Cyble, Elster v200H).
+- In-app key-fingerprint search (paste a hex, find which meter uses it).
+- RSSI history sparkline per meter on the detail page.
+- Translations.
+
+US protocols (Itron ERT, Neptune R900, etc.) are **out of scope** — they
+are different radio stacks. A separate sister-app would be the right
+vehicle if anyone wants to write one.
 
 ## Acknowledgements
 
-The protocol implementation was cross-checked against:
-
-- [wmbusmeters](https://github.com/wmbusmeters/wmbusmeters) — the most
-  thorough open-source wM-Bus parser
-- [rtl-wmbus](https://github.com/xaelsouth/rtl-wmbus) — SDR receiver
-  used as the reference comparator during development
-- [rtl_433](https://github.com/merbanan/rtl_433) — multi-protocol SDR
-  decoder
+Standing on the shoulders of giants — see [Standards & references](#standards--references)
+above. Special thanks to the wmbusmeters maintainers for keeping every EU
+meter quirk documented in plain code, and to the Flipper Zero open-source
+community for the SubGHz device-plugin abstraction that makes external
+CC1101 support a dozen-line job.
 
 ## License
 
-MIT. See `LICENSE`.
+Released under the **GNU General Public License v3.0 or later** — see
+[`LICENSE`](LICENSE) for the full text. In short: you may use, study,
+modify, and redistribute this software, but any redistributed copy or
+derivative work must remain under GPLv3 and ship its complete
+corresponding source. The `_refs/` directory used during development is
+not shipped in the `.fap` and remains under its upstream licences.

@@ -31,7 +31,7 @@ on the 868 MHz band using only the CC1101 — internal or external module.
 ---
 
 > [!CAUTION]
-> **Only point this app at meters you own.** Decrypting someone else's meter
+> **Only use this on meters you own.** Decrypting someone else's meter
 > is illegal in most jurisdictions. The author does not condone unlawful use
 > and is not responsible for what you do with this tool. Read the full
 > [**Legal Disclaimer**](DISCLAIMER.md) before installing.

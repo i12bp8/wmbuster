@@ -48,10 +48,6 @@ on the 868 MHz band using only the CC1101 — internal or external module.
   T+C is the default and decodes both T-mode (3-of-6) and C-mode (NRZ
   Format A & B) on a single chip configuration via post-sync byte detection
   (`0xCD` / `0x3D` / fall-through).
-- **External CC1101 module support** — Settings → Module → External routes
-  RX through the GPIO-header module for noticeably better range and a
-  proper external antenna. Auto-falls-back to the internal radio when no
-  module is present. *(New in 1.1.0.)*
 - **EN 13757-3 application layer** — DIF/VIF walker covering Energy,
   Volume, Mass, Power, Volume flow, Mass flow, Flow / Return / External
   temperatures, Temperature difference, Pressure, On-time, Operating time,
@@ -148,22 +144,11 @@ decoded reading appears.
 | T+C   | 868.95 MHz | 100 kbit/s        | T1 or C1, auto-detect | **Default** — broadest      |
 | S1    | 868.30 MHz | 32.768 kbit/s     | Manchester            | Legacy water / gas          |
 
-## External CC1101 module
+## External CC1101
 
-> [!TIP]
-> An external module typically buys you **10–20 dB** more sensitivity
-> compared with the internal antenna and lets you use a proper SMA antenna.
-> Modules from Tindie, AliExpress, or quen0n's PCB all work.
-
-1. Wire the module to the GPIO header — same pin-out as the standard
-   Flipper external CC1101 mod (PA7=MOSI, PA6=MISO, PB3=SCK, PD0=CSN,
-   PA4=GDO0, GND, 3V3 from pin 9).
-2. Open **wM-Buster → Settings → Module → External**.
-3. Re-enter the **Scan** view. The OTG rail powers the module while
-   scanning and shuts off when you stop.
-
-If the module isn't detected, the app silently falls back to the internal
-radio so you never get a black screen.
+If you have a GPIO-attached CC1101 module wired to the standard Flipper
+pin-out, switch **Settings → Module → External**. If no module is
+detected the app falls back to the internal radio.
 
 ## Documentation
 

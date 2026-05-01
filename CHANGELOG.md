@@ -7,6 +7,21 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [1.1.1] — 2026-05-01
+
+### Fixed
+- **Internal CC1101 receiving nothing in 1.1.0.** Routing the on-board
+  radio through the `subghz_devices_*` plugin API left the chip in a
+  state where the FIFO never accumulated bytes, so no telegrams were
+  decoded. Reverted the internal path to direct `furi_hal_subghz_*`
+  calls (the same code that worked in 1.0). The plugin abstraction is
+  retained for the external module, which it was actually designed for.
+
+### Changed
+- Trimmed README, GitHub Pages, and source comments. The external CC1101
+  toggle is documented as a one-liner; standard practice in any modern
+  Sub-GHz app and not worth a feature pitch.
+
 ## [1.1.0] — 2026-04-30
 
 ### Added
@@ -69,6 +84,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - SD logging of raw + parsed telegrams for offline analysis.
 - Custom canvas views for the meter list and per-meter detail page.
 
-[Unreleased]: https://github.com/i12bp8/wmbuster/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/i12bp8/wmbuster/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/i12bp8/wmbuster/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/i12bp8/wmbuster/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/i12bp8/wmbuster/releases/tag/v1.0.0

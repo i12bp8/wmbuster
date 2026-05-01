@@ -78,8 +78,6 @@ void wmbus_view_settings_enter(void* ctx) {
     variable_item_set_current_value_index(it, app->settings.logging ? 1 : 0);
     variable_item_set_current_value_text(it, app->settings.logging ? "On" : "Off");
 
-    /* Module: pick the on-board CC1101 (default) or the GPIO-attached
-     * external module. The change applies on the next worker start. */
     it = variable_item_list_add(app->var_list, "Module", WmbusModule_Count_,
                                 on_module_change, app);
     variable_item_set_current_value_index(it, app->settings.module);

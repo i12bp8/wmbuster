@@ -291,7 +291,6 @@
     <nav class="nav-links">
       <a href="#features">Features</a>
       <a href="#install">Install</a>
-      <a href="#external">External CC1101</a>
       <a href="#legal">Legal</a>
       <a href="https://github.com/i12bp8/wmbuster">GitHub</a>
     </nav>
@@ -374,11 +373,6 @@
       <p>Techem, Kamstrup, Diehl/IZAR, Qundis/ista/Brunata, BMeters, Engelmann, Sontex, Zenner, Apator, GWF, BFW…</p>
     </div>
     <div class="card">
-      <span class="glyph">&lt;~&gt;</span>
-      <h3>External CC1101</h3>
-      <p>Settings &rarr; Module &rarr; External routes RX through the GPIO module for 10–20 dB more sensitivity. Falls back automatically.</p>
-    </div>
-    <div class="card">
       <span class="glyph">[#]</span>
       <h3>SD logging</h3>
       <p>Raw and parsed telegrams streamed to <code>/ext/apps_data/wmbuster/</code> for offline analysis with rtl_433 or wmbusmeters.</p>
@@ -428,30 +422,6 @@ make -C tests check</code></pre>
       <tr><td>S1</td>  <td>868.30 MHz</td><td>32.768 kbit/s</td><td>Manchester</td>           <td>Legacy water / gas</td></tr>
     </tbody>
   </table>
-</section>
-
-<section class="block" id="external">
-  <h2>External CC1101 module</h2>
-  <p>An external module typically buys you <strong>10–20 dB</strong> more
-     sensitivity compared with the internal antenna and lets you plug in a
-     real SMA antenna. Modules from Tindie, AliExpress, or
-     <a href="https://github.com/quen0n/flipperzero-ext-cc1101">quen0n's PCB</a>
-     all work.</p>
-
-  <ol style="color: var(--fg-muted); padding-left: 22px;">
-    <li>Wire the module to the GPIO header — same pin-out as the standard
-        Flipper external CC1101 mod (PA7=MOSI, PA6=MISO, PB3=SCK, PD0=CSN,
-        PA4=GDO0, GND, 3V3 from pin 9).</li>
-    <li>Open <strong>wM-Buster &rarr; Settings &rarr; Module &rarr; External</strong>.</li>
-    <li>Re-enter the <strong>Scan</strong> view. The OTG rail powers the
-        module while scanning and shuts off when you stop.</li>
-  </ol>
-
-  <div class="callout info">
-    <strong>Auto-fallback</strong>
-    If the module isn't detected, the app silently falls back to the
-    internal radio so you never get a black screen.
-  </div>
 </section>
 
 <section class="block" id="contributing">

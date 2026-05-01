@@ -48,10 +48,6 @@ static bool read_rxbytes_stable(const FuriHalSpiBusHandle* h, uint8_t* out, bool
 
 size_t wmbus_hal_rx_drain(uint8_t* dst, size_t cap, bool external) {
     if(!dst || cap == 0) return 0;
-    /* External CC1101 modules sit on the GPIO header behind the
-     * `external` SPI bus that the cc1101_ext plugin initialises during
-     * `subghz_devices_begin()`. The internal radio remains on the
-     * dedicated `subghz` bus. */
     const FuriHalSpiBusHandle* h = external
                                        ? &furi_hal_spi_bus_handle_external
                                        : &furi_hal_spi_bus_handle_subghz;

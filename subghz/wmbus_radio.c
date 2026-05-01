@@ -1,12 +1,7 @@
-/* Radio device selector. See wmbus_radio.h for the contract.
- *
- * The implementation is a near-verbatim port of ProtoPirate's
- * `radio_device_loader`: we power the OTG rail (the GPIO header's 5 V
- * line that feeds an external CC1101 board), probe the plugin, and fall
- * back to the on-board chip whenever the external module is absent or
- * its plugin failed to register. */
-
 #include "wmbus_radio.h"
+/* Selects the active CC1101 (internal/external), powers the GPIO 5 V
+ * rail when the external module is in use, releases it on teardown.
+ * Modeled on ProtoPirate's radio_device_loader. */
 
 #include <applications/drivers/subghz/cc1101_ext/cc1101_ext_interconnect.h>
 #include <lib/subghz/devices/cc1101_int/cc1101_int_interconnect.h>
@@ -16,15 +11,14 @@
 
 #define TAG "WmbusRadio"
 
-/* OTG rail bookkeeping: only flip the rail off if we were the ones who
- * turned it on. Other apps / firmware may already be using it. */
+/* Only release the OTG rail if we were the one who enabled it. */
 static bool s_otg_owned = false;
 
 static void otg_power_on(void) {
     uint8_t tries = 0;
     while(!furi_hal_power_is_otg_enabled() && tries++ < 5) {
         furi_hal_power_enable_otg();
-        furi_delay_ms(10); /* CC1101 power-up settle */
+        furi_delay_ms(10);
     }
     if(furi_hal_power_is_otg_enabled()) s_otg_owned = true;
 }

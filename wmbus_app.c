@@ -150,9 +150,6 @@ WmbusApp* wmbus_app_alloc(void) {
     app->settings.module    = WmbusModuleInternal_;
     app->selected = -1;
 
-    /* Initialise the SubGHz device registry once for the whole app life-
-     * time. The worker thread picks the active radio (internal/external
-     * CC1101) on each (re-)start based on `settings.module`. */
     subghz_devices_init();
 
     app->lock = furi_mutex_alloc(FuriMutexTypeNormal);
@@ -222,7 +219,6 @@ void wmbus_app_free(WmbusApp* app) {
 
     if(app->key_store) key_store_free(app->key_store);
 
-    /* Tear down the SubGHz device registry that we set up in alloc. */
     subghz_devices_deinit();
 
     furi_record_close(RECORD_NOTIFICATION);

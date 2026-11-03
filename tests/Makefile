@@ -47,13 +47,39 @@ PORTS_SRC = test_ports.c \
 test_ports: $(PORTS_SRC)
 	$(CC) $(CFLAGS) $(PORTS_SRC) -o $@
 
-check: test_link test_izar test_apator_hca test_ports
+COMMON_SRC = ../drivers/europe/techem/_compact.c \
+             ../drivers/engine/driver.c \
+             ../protocol/wmbus_link.c \
+             ../protocol/wmbus_manuf.c \
+             ../protocol/wmbus_medium.c \
+             ../protocol/wmbus_app_layer.c
+
+TECHEM_WATER_SRC = test_techem_water.c \
+             ../drivers/europe/techem/mkradio_water.c \
+             $(COMMON_SRC)
+
+test_techem_water: $(TECHEM_WATER_SRC)
+	$(CC) $(CFLAGS) $(TECHEM_WATER_SRC) -o $@
+
+TECHEM_OTHER_SRC = test_techem_other.c \
+             ../drivers/europe/techem/fhkv_hca.c \
+             ../drivers/europe/techem/compact5_heat.c \
+             ../drivers/europe/techem/vario_heat.c \
+             ../drivers/europe/techem/smoke.c \
+             $(COMMON_SRC)
+
+test_techem_other: $(TECHEM_OTHER_SRC)
+	$(CC) $(CFLAGS) $(TECHEM_OTHER_SRC) -o $@
+
+check: test_link test_izar test_apator_hca test_ports test_techem_water test_techem_other
 	./test_link
 	./test_izar
 	./test_apator_hca
 	./test_ports
+	./test_techem_water
+	./test_techem_other
 
 clean:
-	rm -f test_link test_izar test_apator_hca test_ports
+	rm -f test_link test_izar test_apator_hca test_ports test_techem_water test_techem_other
 
 .PHONY: check clean

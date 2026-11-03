@@ -26,10 +26,10 @@ size_t techem_decode_fhkv(uint8_t version,
                           const uint8_t* a, size_t l,
                           char* o, size_t cap);
 
-/* Decode an MK-Radio water frame. `with_dates` enables the
- * billing-period date fields (mkradio3 has them, mkradio4 ships
- * zero-filled date bytes that aren't worth showing). */
-size_t techem_decode_water(bool with_dates,
+/* Decode an MK-Radio water frame. `title` is the first output line
+ * (e.g. "Techem warm water"). `with_dates` enables the billing-period
+ * date fields; invalid dates render as "-". */
+size_t techem_decode_water(const char* title, bool with_dates,
                            const uint8_t* a, size_t l,
                            char* o, size_t cap);
 
@@ -46,3 +46,7 @@ size_t techem_decode_vario(const uint8_t* a, size_t l,
  * is not public; we surface status + flag bytes verbatim. */
 size_t techem_decode_smoke(const uint8_t* a, size_t l,
                            char* o, size_t cap);
+
+/* Decode a TSD2 smoke detector frame: status + previous billing date. */
+size_t techem_decode_tsd2(const uint8_t* a, size_t l,
+                          char* o, size_t cap);
